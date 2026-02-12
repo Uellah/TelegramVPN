@@ -15,7 +15,21 @@ if (!BOT_TOKEN || !WEBAPP_URL) {
 
 const app = express();
 app.use(express.json());
+app.use((req, res, next) => {
+  res.set('Access-Control-Allow-Origin', '*');
+  res.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.set('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(200);
+  next();
+});
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Dashboard React app (собранный build из /dashboard)
+const dashboardPath = path.join(__dirname, 'dashboard', 'dist');
+app.use('/dashboard', express.static(dashboardPath));
+app.get('/dashboard*', (req, res) => {
+  res.sendFile(path.join(dashboardPath, 'index.html'));
+});
 
 /**
  * Validates Telegram initData using HMAC-SHA256.
@@ -69,6 +83,25 @@ app.post('/api/me', (req, res) => {
   }
 
   res.json({ ok: true, user });
+});
+
+// --- Stats API (заглушки для будущей статистики удалённого сервера) ---
+app.get('/api/stats', (req, res) => {
+  res.json({
+    server: { name: 'vpn-server-1', status: 'online', uptime: 0 },
+    cpu: { usage: 0, cores: 0 },
+    memory: { used: 0, total: 0, percent: 0 },
+    network: { rx: 0, tx: 0 },
+    connections: 0,
+    _stub: true
+  });
+});
+
+app.get('/api/servers', (req, res) => {
+  res.json({
+    servers: [],
+    _stub: true
+  });
 });
 
 const bot = new Bot(BOT_TOKEN);

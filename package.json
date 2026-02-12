@@ -5,7 +5,9 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "dashboard": "cd dashboard && npm run dev",
+    "dashboard:build": "cd dashboard && npm run build"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

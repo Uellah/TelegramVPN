@@ -66,18 +66,35 @@ npm run dev
 6. **Настройте Mini App в BotFather:**
    - Bot Settings → Configure Mini App → укажите `https://your-app.onrender.com`
 
+## Dashboard (статистика серверов)
+
+React-приложение для будущей статистики удалённого VPN-сервера. Пока заглушки.
+
+**Разработка:**
+```bash
+# Терминал 1 — бэкенд
+npm run dev
+
+# Терминал 2 — дашборд
+npm run dashboard
+```
+Дашборд: http://localhost:5173 (проксирует /api на :3000)
+
+**Продакшен:** после `npm run dashboard:build` дашборд доступен по `/dashboard`.
+
 ## Структура проекта
 
 ```
-├── server.js         # Express + API + Bot
-├── public/
-│   ├── index.html    # Страница Mini App
-│   └── app.js        # Фронтенд (Telegram WebApp SDK)
-├── .env              # Секреты (не коммитить!)
-├── .env.example
+├── server.js         # Express + API + Bot + Stats API
+├── public/           # Mini App (Telegram)
+├── dashboard/        # React-дашборд (Vite)
+│   └── src/
+├── .env
 └── package.json
 ```
 
 ## API
 
-- `POST /api/me` — принимает `{ initData }`, проверяет подпись и возвращает `{ ok: true, user }` с данными пользователя из initData.
+- `POST /api/me` — принимает `{ initData }`, проверяет подпись и возвращает `{ ok: true, user }`.
+- `GET /api/stats` — заглушка: статистика сервера (CPU, память, сеть, подключения).
+- `GET /api/servers` — заглушка: список серверов.

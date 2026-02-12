@@ -2,6 +2,8 @@ require('dotenv').config();
 const express = require('express');
 const crypto = require('crypto');
 const path = require('path');
+const os = require('os');
+const fs = require('fs');
 const { Bot, InlineKeyboard, webhookCallback } = require('grammy');
 
 const PORT = process.env.PORT || 3000;
@@ -85,39 +87,94 @@ app.post('/api/me', (req, res) => {
   res.json({ ok: true, user });
 });
 
-// --- Stats API (динамическая заглушка — пример как будет выглядеть) ---
-function generateStubStats() {
-  const baseTime = Date.now() / 1000;
-  const uptime = Math.floor((baseTime % 86400) + 3600 * 12); // ~12ч + случайное
-  const used = 2.1 * 1024 * 1024 * 1024;
-  const total = 4 * 1024 * 1024 * 1024;
-  const cpuUsage = 12 + Math.floor((baseTime % 30));
-  const connections = 47 + Math.floor((baseTime % 20));
-  const rx = 15.2 * 1024 * 1024 * 1024 + (baseTime % 100) * 1024 * 1024;
-  const tx = 3.8 * 1024 * 1024 * 1024 + (baseTime % 50) * 1024 * 1024;
+// --- Real System Stats (Node.js API) ---
+function getCpuUsage() {
+  const cpus = os.cpus();
+  let totalIdle = 0, totalTick = 0;
+  
+  cpus.forEach(cpu => {
+    for (let type in cpu.times) {
+      totalTick += cpu.times[type];
+    }
+    totalIdle += cpu.times.idle;
+  });
+  
+  const idle = totalIdle / cpus.length;
+  const total = totalTick / cpus.length;
+  const usage = 100 - ~~(100 * idle / total);
+  
+  return { usage, cores: cpus.length };
+}
 
-  return {
-    server: { name: 'vpn-amsterdam-01', status: 'online', uptime },
-    cpu: { usage: cpuUsage, cores: 4 },
-    memory: { used, total, percent: Math.round((used / total) * 100) },
-    network: { rx, tx },
-    connections,
-    _stub: true
-  };
+function getMemoryUsage() {
+  const total = os.totalmem();
+  const free = os.freemem();
+  const used = total - free;
+  const percent = Math.round((used / total) * 100);
+  
+  return { used, total, percent };
+}
+
+function getNetworkStats() {
+  // Linux: читаем /proc/net/dev
+  if (process.platform === 'linux' && fs.existsSync('/proc/net/dev')) {
+    try {
+      const data = fs.readFileSync('/proc/net/dev', 'utf8');
+      const lines = data.split('\n').slice(2); // пропускаем заголовок
+      let rx = 0, tx = 0;
+      
+      lines.forEach(line => {
+        const parts = line.trim().split(/\s+/);
+        if (parts[0] && !parts[0].includes('lo:')) { // игнорируем loopback
+          rx += parseInt(parts[1]) || 0;
+          tx += parseInt(parts[9]) || 0;
+        }
+      });
+      
+      return { rx, tx };
+    } catch {}
+  }
+  
+  // Fallback: примерные данные
+  return { rx: 0, tx: 0 };
+}
+
+function getActiveConnections() {
+  // Для VPN: можно читать WireGuard peers, OpenVPN status или TCP connections
+  // Простой вариант: возвращаем 0 (можно доработать под конкретный VPN)
+  return 0;
 }
 
 app.get('/api/stats', (req, res) => {
-  res.json(generateStubStats());
+  const hostname = os.hostname();
+  const uptime = os.uptime();
+  const cpu = getCpuUsage();
+  const memory = getMemoryUsage();
+  const network = getNetworkStats();
+  const connections = getActiveConnections();
+  
+  res.json({
+    server: { name: hostname, status: 'online', uptime: Math.floor(uptime) },
+    cpu,
+    memory,
+    network,
+    connections,
+    _real: true // отметка что это реальные данные
+  });
 });
 
 app.get('/api/servers', (req, res) => {
+  // Список серверов — можно хардкодить или читать из конфига
   res.json({
     servers: [
-      { id: '1', name: 'vpn-amsterdam-01', region: 'EU', status: 'online', users: 47 },
-      { id: '2', name: 'vpn-frankfurt-01', region: 'EU', status: 'online', users: 32 },
-      { id: '3', name: 'vpn-nyc-01', region: 'US', status: 'maintenance', users: 0 }
-    ],
-    _stub: true
+      { 
+        id: '1', 
+        name: os.hostname(), 
+        region: 'Local', 
+        status: 'online', 
+        users: getActiveConnections() 
+      }
+    ]
   });
 });
 

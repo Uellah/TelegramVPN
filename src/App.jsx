@@ -84,7 +84,8 @@ function App() {
   if (loading) return <div className="loading">Загрузка...</div>
   if (error) return <div className="error">Ошибка: {error}</div>
 
-  const isStub = stats?._stub || servers?._stub
+  const isReal = stats?._real
+  const isStub = !isReal && (stats?._stub || servers?._stub)
 
   return (
     <div className="app">

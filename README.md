@@ -90,8 +90,32 @@ npm run dev
 └── package.json
 ```
 
+## Отправка статистики с локального компа
+
+**На твоём KDE Neon:**
+
+1. Создай `.env` в папке проекта:
+```env
+SERVER_URL=https://telegramuellahbot.onrender.com
+API_KEY=твой-секретный-ключ
+INTERVAL_SEC=5
+```
+
+2. Запусти агента:
+```bash
+npm run agent
+```
+
+Агент каждые 5 секунд отправляет статистику (CPU, память, сеть) на Render. Mini App показывает данные твоего компа.
+
+**На Render добавь переменную:**
+```
+API_KEY=твой-секретный-ключ
+```
+
 ## API
 
-- `POST /api/me` — принимает `{ initData }`, проверяет подпись и возвращает `{ ok: true, user }`.
-- `GET /api/stats` — заглушка: статистика сервера (CPU, память, сеть, подключения).
-- `GET /api/servers` — заглушка: список серверов.
+- `POST /api/me` — валидация initData Telegram
+- `POST /api/stats/report` — приём статистики от агента (требует X-API-Key)
+- `GET /api/stats` — возврат последней статистики
+- `GET /api/servers` — список серверов

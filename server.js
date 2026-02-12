@@ -9,11 +9,16 @@ const { Bot, InlineKeyboard, webhookCallback } = require('grammy');
 const PORT = process.env.PORT || 3000;
 const BOT_TOKEN = process.env.BOT_TOKEN;
 const WEBAPP_URL = process.env.WEBAPP_URL;
+const API_KEY = process.env.API_KEY || 'dev-secret-key';
 
 if (!BOT_TOKEN || !WEBAPP_URL) {
   console.error('Missing BOT_TOKEN or WEBAPP_URL in .env');
   process.exit(1);
 }
+
+// Хранилище последней статистики (в памяти)
+let latestStats = null;
+let latestServers = [];
 
 const app = express();
 app.use(express.json());
@@ -145,37 +150,68 @@ function getActiveConnections() {
   return 0;
 }
 
-app.get('/api/stats', (req, res) => {
-  const hostname = os.hostname();
-  const uptime = os.uptime();
-  const cpu = getCpuUsage();
-  const memory = getMemoryUsage();
-  const network = getNetworkStats();
-  const connections = getActiveConnections();
-  
-  res.json({
-    server: { name: hostname, status: 'online', uptime: Math.floor(uptime) },
+// POST /api/stats/report — принимает статистику от агента на локальном компе
+app.post('/api/stats/report', (req, res) => {
+  const apiKey = req.headers['x-api-key'] || req.body.apiKey;
+  if (apiKey !== API_KEY) {
+    return res.status(401).json({ ok: false, error: 'Invalid API key' });
+  }
+
+  const { server, cpu, memory, network, connections } = req.body;
+  if (!server || !cpu || !memory) {
+    return res.status(400).json({ ok: false, error: 'Missing required fields' });
+  }
+
+  latestStats = {
+    server,
     cpu,
     memory,
-    network,
-    connections,
-    _real: true // отметка что это реальные данные
-  });
+    network: network || { rx: 0, tx: 0 },
+    connections: connections || 0,
+    _real: true,
+    _timestamp: Date.now()
+  };
+
+  res.json({ ok: true });
+});
+
+// GET /api/stats — возвращает последнюю сохранённую статистику
+app.get('/api/stats', (req, res) => {
+  if (!latestStats) {
+    // Если агент ещё не отправил данные, показываем локальную статистику сервера
+    const hostname = os.hostname();
+    const uptime = os.uptime();
+    const cpu = getCpuUsage();
+    const memory = getMemoryUsage();
+    const network = getNetworkStats();
+    const connections = getActiveConnections();
+    
+    return res.json({
+      server: { name: hostname, status: 'online', uptime: Math.floor(uptime) },
+      cpu,
+      memory,
+      network,
+      connections,
+      _real: true,
+      _local: true
+    });
+  }
+
+  res.json(latestStats);
 });
 
 app.get('/api/servers', (req, res) => {
-  // Список серверов — можно хардкодить или читать из конфига
-  res.json({
-    servers: [
-      { 
-        id: '1', 
-        name: os.hostname(), 
-        region: 'Local', 
-        status: 'online', 
-        users: getActiveConnections() 
-      }
-    ]
-  });
+  const servers = latestServers.length > 0 ? latestServers : [
+    { 
+      id: '1', 
+      name: latestStats?.server?.name || os.hostname(), 
+      region: 'Remote', 
+      status: latestStats ? 'online' : 'offline', 
+      users: latestStats?.connections || 0 
+    }
+  ];
+  
+  res.json({ servers });
 });
 
 const bot = new Bot(BOT_TOKEN);

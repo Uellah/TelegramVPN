@@ -85,29 +85,48 @@ app.post('/api/me', (req, res) => {
   res.json({ ok: true, user });
 });
 
-// --- Stats API (заглушки для будущей статистики удалённого сервера) ---
-app.get('/api/stats', (req, res) => {
-  res.json({
-    server: { name: 'vpn-server-1', status: 'online', uptime: 0 },
-    cpu: { usage: 0, cores: 0 },
-    memory: { used: 0, total: 0, percent: 0 },
-    network: { rx: 0, tx: 0 },
-    connections: 0,
+// --- Stats API (динамическая заглушка — пример как будет выглядеть) ---
+function generateStubStats() {
+  const baseTime = Date.now() / 1000;
+  const uptime = Math.floor((baseTime % 86400) + 3600 * 12); // ~12ч + случайное
+  const used = 2.1 * 1024 * 1024 * 1024;
+  const total = 4 * 1024 * 1024 * 1024;
+  const cpuUsage = 12 + Math.floor((baseTime % 30));
+  const connections = 47 + Math.floor((baseTime % 20));
+  const rx = 15.2 * 1024 * 1024 * 1024 + (baseTime % 100) * 1024 * 1024;
+  const tx = 3.8 * 1024 * 1024 * 1024 + (baseTime % 50) * 1024 * 1024;
+
+  return {
+    server: { name: 'vpn-amsterdam-01', status: 'online', uptime },
+    cpu: { usage: cpuUsage, cores: 4 },
+    memory: { used, total, percent: Math.round((used / total) * 100) },
+    network: { rx, tx },
+    connections,
     _stub: true
-  });
+  };
+}
+
+app.get('/api/stats', (req, res) => {
+  res.json(generateStubStats());
 });
 
 app.get('/api/servers', (req, res) => {
   res.json({
-    servers: [],
+    servers: [
+      { id: '1', name: 'vpn-amsterdam-01', region: 'EU', status: 'online', users: 47 },
+      { id: '2', name: 'vpn-frankfurt-01', region: 'EU', status: 'online', users: 32 },
+      { id: '3', name: 'vpn-nyc-01', region: 'US', status: 'maintenance', users: 0 }
+    ],
     _stub: true
   });
 });
 
 const bot = new Bot(BOT_TOKEN);
 
+const MINI_APP_URL = new URL('/dashboard', WEBAPP_URL).href;
+
 bot.command('start', async (ctx) => {
-  const keyboard = new InlineKeyboard().webApp('Открыть приложение', WEBAPP_URL);
+  const keyboard = new InlineKeyboard().webApp('Открыть приложение', MINI_APP_URL);
   await ctx.reply('Добро пожаловать! Нажмите кнопку, чтобы открыть Mini App:', {
     reply_markup: keyboard
   });

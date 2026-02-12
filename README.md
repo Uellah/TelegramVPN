@@ -35,7 +35,7 @@ PORT=3000
 4. **Настройте Mini App в BotFather:**
 
 - Отправьте `/mybots` → выберите бота → Bot Settings → Configure Mini App
-- Укажите URL вашего приложения (ngrok URL или Production URL)
+- Укажите URL дашборда: `https://ваш-домен/dashboard`
 
 5. **Запустите сервер:**
 
@@ -52,7 +52,7 @@ npm run dev
 2. **New → Web Service**, подключите репозиторий (GitHub/GitLab).
 
 3. **Настройки:**
-   - **Build Command:** `npm install`
+   - **Build Command:** `npm install && npm run build`
    - **Start Command:** `npm start`
    - **Environment:** Node
 
@@ -65,11 +65,11 @@ npm run dev
 5. ** deploy** — Render запустит сборку и деплой.
 
 6. **Настройте Mini App в BotFather:**
-   - Bot Settings → Configure Mini App → укажите `https://your-app.onrender.com`
+   - Bot Settings → Configure Mini App → укажите `https://your-app.onrender.com/dashboard`
 
-## Dashboard (статистика серверов)
+## Dashboard (Mini App)
 
-React-приложение для будущей статистики удалённого VPN-сервера. Пока заглушки.
+React-дашборд со статистикой — это и есть Mini App. Открывается по кнопке «Открыть приложение» при `/start`.
 
 **Разработка:**
 ```bash

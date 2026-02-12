@@ -1,85 +1,101 @@
 #!/usr/bin/env node
 require('dotenv').config();
 const os = require('os');
-const fs = require('fs');
 const https = require('https');
 const http = require('http');
 
 const SERVER_URL = process.env.SERVER_URL || 'http://localhost:3000';
 const API_KEY = process.env.API_KEY || 'dev-secret-key';
 const INTERVAL_SEC = parseInt(process.env.INTERVAL_SEC) || 5;
+const USE_NODE_EXPORTER = process.env.USE_NODE_EXPORTER === 'true';
+const NODE_EXPORTER_URL = process.env.NODE_EXPORTER_URL || 'http://localhost:9100/metrics';
 
-function getCpuUsage() {
-  const cpus = os.cpus();
-  let totalIdle = 0, totalTick = 0;
+// Парсинг Prometheus метрик
+function parsePrometheusMetrics(text) {
+  const lines = text.split('\n').filter(l => l && !l.startsWith('#'));
+  const metrics = {};
   
-  cpus.forEach(cpu => {
-    for (let type in cpu.times) {
-      totalTick += cpu.times[type];
-    }
-    totalIdle += cpu.times.idle;
+  lines.forEach(line => {
+    const [key, value] = line.split(' ');
+    if (key && value) metrics[key] = parseFloat(value);
   });
-  
-  const idle = totalIdle / cpus.length;
-  const total = totalTick / cpus.length;
-  const usage = 100 - ~~(100 * idle / total);
-  
-  return { usage, cores: cpus.length };
-}
 
-function getMemoryUsage() {
-  const total = os.totalmem();
-  const free = os.freemem();
-  const used = total - free;
-  const percent = Math.round((used / total) * 100);
-  
-  return { used, total, percent };
-}
+  // CPU: 100 - idle%
+  const cpuIdle = metrics['node_cpu_seconds_total{mode="idle"}'] || 0;
+  const cpuTotal = Object.keys(metrics)
+    .filter(k => k.startsWith('node_cpu_seconds_total'))
+    .reduce((sum, k) => sum + (metrics[k] || 0), 0);
+  const cpuUsage = cpuTotal > 0 ? Math.round(100 - (cpuIdle / cpuTotal) * 100) : 0;
 
-function getNetworkStats() {
-  if (process.platform === 'linux' && fs.existsSync('/proc/net/dev')) {
-    try {
-      const data = fs.readFileSync('/proc/net/dev', 'utf8');
-      const lines = data.split('\n').slice(2);
-      let rx = 0, tx = 0;
-      
-      lines.forEach(line => {
-        const parts = line.trim().split(/\s+/);
-        if (parts[0] && !parts[0].includes('lo:')) {
-          rx += parseInt(parts[1]) || 0;
-          tx += parseInt(parts[9]) || 0;
-        }
-      });
-      
-      return { rx, tx };
-    } catch {}
-  }
-  
-  return { rx: 0, tx: 0 };
-}
+  // Memory
+  const memTotal = metrics['node_memory_MemTotal_bytes'] || 0;
+  const memAvail = metrics['node_memory_MemAvailable_bytes'] || 0;
+  const memUsed = memTotal - memAvail;
 
-function getActiveConnections() {
-  // TODO: для WireGuard: wg show all dump
-  // TODO: для OpenVPN: parse status file
-  return 0;
-}
+  // Network (суммарно по всем интерфейсам)
+  const rx = Object.keys(metrics)
+    .filter(k => k.startsWith('node_network_receive_bytes_total'))
+    .reduce((sum, k) => sum + (metrics[k] || 0), 0);
+  const tx = Object.keys(metrics)
+    .filter(k => k.startsWith('node_network_transmit_bytes_total'))
+    .reduce((sum, k) => sum + (metrics[k] || 0), 0);
 
-function collectStats() {
   return {
     server: { 
       name: os.hostname(), 
       status: 'online', 
-      uptime: Math.floor(os.uptime()) 
+      uptime: Math.floor(metrics['node_boot_time_seconds'] ? Date.now() / 1000 - metrics['node_boot_time_seconds'] : os.uptime())
     },
-    cpu: getCpuUsage(),
-    memory: getMemoryUsage(),
-    network: getNetworkStats(),
-    connections: getActiveConnections()
+    cpu: { usage: cpuUsage, cores: os.cpus().length },
+    memory: { used: memUsed, total: memTotal, percent: memTotal > 0 ? Math.round((memUsed / memTotal) * 100) : 0 },
+    network: { rx, tx },
+    connections: 0 // TODO: WireGuard/OpenVPN peers
   };
 }
 
-function sendStats() {
-  const stats = collectStats();
+// Сбор через os (если node_exporter не используется)
+function collectStatsNative() {
+  const cpus = os.cpus();
+  let totalIdle = 0, totalTick = 0;
+  
+  cpus.forEach(cpu => {
+    for (let type in cpu.times) totalTick += cpu.times[type];
+    totalIdle += cpu.times.idle;
+  });
+  
+  const usage = 100 - ~~(100 * totalIdle / totalTick);
+  const total = os.totalmem();
+  const free = os.freemem();
+
+  return {
+    server: { name: os.hostname(), status: 'online', uptime: Math.floor(os.uptime()) },
+    cpu: { usage, cores: cpus.length },
+    memory: { used: total - free, total, percent: Math.round(((total - free) / total) * 100) },
+    network: { rx: 0, tx: 0 },
+    connections: 0
+  };
+}
+
+async function collectStats() {
+  if (!USE_NODE_EXPORTER) return collectStatsNative();
+
+  return new Promise((resolve, reject) => {
+    const url = new URL(NODE_EXPORTER_URL);
+    const lib = url.protocol === 'https:' ? https : http;
+    
+    lib.get(url, (res) => {
+      let data = '';
+      res.on('data', chunk => data += chunk);
+      res.on('end', () => resolve(parsePrometheusMetrics(data)));
+    }).on('error', (err) => {
+      console.error('node_exporter error:', err.message);
+      resolve(collectStatsNative()); // fallback
+    });
+  });
+}
+
+async function sendStats() {
+  const stats = await collectStats();
   const payload = JSON.stringify(stats);
   const url = new URL('/api/stats/report', SERVER_URL);
   const isHttps = url.protocol === 'https:';

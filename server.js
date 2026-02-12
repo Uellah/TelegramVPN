@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const crypto = require('crypto');
 const path = require('path');
-const { Bot, InlineKeyboard } = require('grammy');
+const { Bot, InlineKeyboard, webhookCallback } = require('grammy');
 
 const PORT = process.env.PORT || 3000;
 const BOT_TOKEN = process.env.BOT_TOKEN;
@@ -113,8 +113,18 @@ bot.command('start', async (ctx) => {
   });
 });
 
-bot.start();
-
-app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
-});
+const useWebhook = process.env.USE_WEBHOOK === 'true';
+if (useWebhook) {
+  const webhookPath = '/webhook';
+  const webhookUrl = new URL(WEBAPP_URL).origin + webhookPath;
+  app.post(webhookPath, webhookCallback(bot, 'express'));
+  app.listen(PORT, async () => {
+    await bot.api.setWebhook(webhookUrl);
+    console.log(`Server running at http://localhost:${PORT} (webhook: ${webhookUrl})`);
+  });
+} else {
+  app.listen(PORT, () => {
+    console.log(`Server running at http://localhost:${PORT} (polling)`);
+  });
+  bot.start();
+}

@@ -59,6 +59,7 @@ npm run dev
 4. **Environment Variables (секреты):**
    - `BOT_TOKEN` — токен бота от BotFather
    - `WEBAPP_URL` — URL сервиса Render (например `https://your-app.onrender.com`)
+   - `USE_WEBHOOK=true` — обязательно на Render, иначе конфликт 409 при редеплое
    - `PORT` — Render задаёт сам, можно не указывать
 
 5. ** deploy** — Render запустит сборку и деплой.

@@ -67,29 +67,25 @@ npm run dev
 6. **Настройте Mini App в BotFather:**
    - Bot Settings → Configure Mini App → укажите `https://your-app.onrender.com/dashboard`
 
-## Dashboard (Mini App)
+## Mini App (Dashboard)
 
-React-дашборд со статистикой — это и есть Mini App. Открывается по кнопке «Открыть приложение» при `/start`.
+React-дашборд — Mini App. Открывается по кнопке «Открыть приложение» при `/start`.
 
 **Разработка:**
 ```bash
-# Терминал 1 — бэкенд
 npm run dev
-
-# Терминал 2 — дашборд
-npm run dashboard
 ```
-Дашборд: http://localhost:5173 (проксирует /api на :3000)
+Сервер: http://localhost:3000, дашборд: http://localhost:5173 (Vite)
 
-**Продакшен:** после `npm run dashboard:build` дашборд доступен по `/dashboard`.
+**Продакшен:** Build command: `npm install && npm run build`
 
 ## Структура проекта
 
 ```
-├── server.js         # Express + API + Bot + Stats API
-├── public/           # Mini App (Telegram)
-├── dashboard/        # React-дашборд (Vite)
-│   └── src/
+├── server.js         # Express + API + Bot
+├── src/              # React Mini App (дашборд)
+├── index.html        # Vite entry
+├── vite.config.js
 ├── .env
 └── package.json
 ```

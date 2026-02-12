@@ -65,7 +65,7 @@
   color: #22c55e;
 }
 
-.status.offline {
+.status.offline, .status.maintenance {
   color: #ef4444;
 }
 

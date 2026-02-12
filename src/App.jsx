@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import './App.css'
 
 const API = '/api'
+const REFRESH_MS = 5000
 
 function useTelegramWebApp() {
   useEffect(() => {
@@ -12,7 +13,6 @@ function useTelegramWebApp() {
     }
   }, [])
 }
-const REFRESH_MS = 5000
 
 function formatUptime(sec) {
   if (!sec) return '0 с'

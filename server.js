@@ -24,8 +24,8 @@ app.use((req, res, next) => {
 });
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Dashboard React app (собранный build из /dashboard)
-const dashboardPath = path.join(__dirname, 'dashboard', 'dist');
+// Dashboard React app (собранный Vite build)
+const dashboardPath = path.join(__dirname, 'dist');
 app.use('/dashboard', express.static(dashboardPath));
 app.get('/dashboard*', (req, res) => {
   res.sendFile(path.join(dashboardPath, 'index.html'));

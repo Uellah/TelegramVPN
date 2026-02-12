@@ -113,7 +113,8 @@ bot.command('start', async (ctx) => {
   });
 });
 
-const useWebhook = process.env.USE_WEBHOOK === 'true';
+const isProductionUrl = WEBAPP_URL && /^https:\/\//.test(WEBAPP_URL) && !WEBAPP_URL.includes('localhost');
+const useWebhook = process.env.USE_WEBHOOK === 'true' || (process.env.USE_WEBHOOK !== 'false' && isProductionUrl);
 if (useWebhook) {
   const webhookPath = '/webhook';
   const webhookUrl = new URL(WEBAPP_URL).origin + webhookPath;

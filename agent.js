@@ -10,6 +10,8 @@ const INTERVAL_SEC = parseInt(process.env.INTERVAL_SEC) || 5;
 const USE_NODE_EXPORTER = process.env.USE_NODE_EXPORTER === 'true';
 const NODE_EXPORTER_URL = process.env.NODE_EXPORTER_URL || 'http://localhost:9100/metrics';
 
+let prevCpuTimes = null;
+
 // Парсинг Prometheus метрик
 function parsePrometheusMetrics(text) {
   const lines = text.split('\n').filter(l => l && !l.startsWith('#'));
@@ -53,23 +55,48 @@ function parsePrometheusMetrics(text) {
   };
 }
 
-// Сбор через os (если node_exporter не используется)
-function collectStatsNative() {
+// Правильный расчёт CPU (дельта между замерами)
+function getCpuTimes() {
   const cpus = os.cpus();
-  let totalIdle = 0, totalTick = 0;
+  let idle = 0, total = 0;
   
   cpus.forEach(cpu => {
-    for (let type in cpu.times) totalTick += cpu.times[type];
-    totalIdle += cpu.times.idle;
+    idle += cpu.times.idle;
+    for (let type in cpu.times) {
+      total += cpu.times[type];
+    }
   });
   
-  const usage = 100 - ~~(100 * totalIdle / totalTick);
+  return { idle, total };
+}
+
+function calculateCpuUsage() {
+  const current = getCpuTimes();
+  
+  if (!prevCpuTimes) {
+    prevCpuTimes = current;
+    return 0;
+  }
+  
+  const idleDelta = current.idle - prevCpuTimes.idle;
+  const totalDelta = current.total - prevCpuTimes.total;
+  
+  prevCpuTimes = current;
+  
+  if (totalDelta === 0) return 0;
+  return Math.round(100 - (idleDelta / totalDelta) * 100);
+}
+
+// Сбор через os (если node_exporter не используется)
+function collectStatsNative() {
+  const cpuUsage = calculateCpuUsage();
+  const cpus = os.cpus();
   const total = os.totalmem();
   const free = os.freemem();
 
   return {
     server: { name: os.hostname(), status: 'online', uptime: Math.floor(os.uptime()) },
-    cpu: { usage, cores: cpus.length },
+    cpu: { usage: cpuUsage, cores: cpus.length },
     memory: { used: total - free, total, percent: Math.round(((total - free) / total) * 100) },
     network: { rx: 0, tx: 0 },
     connections: 0

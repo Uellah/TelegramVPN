@@ -88,17 +88,47 @@ function calculateCpuUsage() {
 }
 
 // Сбор через os (если node_exporter не используется)
+function getNetworkStatsNative() {
+  // Linux: читаем /proc/net/dev
+  if (os.platform() === 'linux') {
+    try {
+      const data = fs.readFileSync('/proc/net/dev', 'utf8');
+      const lines = data.split('\n');
+      let rx = 0, tx = 0;
+      
+      for (const line of lines) {
+        // Пропускаем заголовки и loopback
+        if (!line.includes(':') || line.trim().startsWith('lo:')) continue;
+        
+        const parts = line.split(/\s+/).filter(Boolean);
+        if (parts.length >= 10) {
+          rx += parseInt(parts[1]) || 0;  // bytes received
+          tx += parseInt(parts[9]) || 0;  // bytes transmitted
+        }
+      }
+      
+      return { rx, tx };
+    } catch (err) {
+      console.error('Failed to read /proc/net/dev:', err.message);
+    }
+  }
+  
+  // macOS/Windows: возвращаем 0
+  return { rx: 0, tx: 0 };
+}
+
 function collectStatsNative() {
   const cpuUsage = calculateCpuUsage();
   const cpus = os.cpus();
   const total = os.totalmem();
   const free = os.freemem();
+  const network = getNetworkStatsNative();
 
   return {
     server: { name: os.hostname(), status: 'online', uptime: Math.floor(os.uptime()) },
     cpu: { usage: cpuUsage, cores: cpus.length },
     memory: { used: total - free, total, percent: Math.round(((total - free) / total) * 100) },
-    network: { rx: 0, tx: 0 },
+    network,
     connections: 0
   };
 }

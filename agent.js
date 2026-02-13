@@ -2,6 +2,7 @@
 require('dotenv').config();
 const os = require('os');
 const fs = require('fs');
+const path = require('path');
 const https = require('https');
 const http = require('http');
 
@@ -10,6 +11,7 @@ const API_KEY = process.env.API_KEY || 'dev-secret-key';
 const INTERVAL_SEC = parseInt(process.env.INTERVAL_SEC) || 5;
 const USE_NODE_EXPORTER = process.env.USE_NODE_EXPORTER === 'true';
 const NODE_EXPORTER_URL = process.env.NODE_EXPORTER_URL || 'http://localhost:9100/metrics';
+const ACTIVITY_FILE = process.env.ACTIVITY_FILE || path.join(__dirname, 'activity.json');
 
 let prevCpuTimes = null;
 
@@ -152,8 +154,31 @@ async function collectStats() {
   });
 }
 
+function readActivity() {
+  try {
+    if (fs.existsSync(ACTIVITY_FILE)) {
+      const raw = fs.readFileSync(ACTIVITY_FILE, 'utf8');
+      const data = JSON.parse(raw);
+      const keysByLetter = (data.keysByLetter && typeof data.keysByLetter === 'object')
+        ? data.keysByLetter
+        : {};
+      return {
+        keysTotal: parseInt(data.keysTotal) || 0,
+        clicksTotal: parseInt(data.clicksTotal) || 0,
+        keysPerMin: parseInt(data.keysPerMin) || 0,
+        clicksPerMin: parseInt(data.clicksPerMin) || 0,
+        keysByLetter
+      };
+    }
+  } catch (e) {
+    // ignore
+  }
+  return { keysTotal: 0, clicksTotal: 0, keysPerMin: 0, clicksPerMin: 0, keysByLetter: {} };
+}
+
 async function sendStats() {
   const stats = await collectStats();
+  stats.activity = readActivity();
   const payload = JSON.stringify(stats);
   const url = new URL('/api/stats/report', SERVER_URL);
   const isHttps = url.protocol === 'https:';

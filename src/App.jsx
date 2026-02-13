@@ -1,18 +1,19 @@
-import { useState, useEffect, useRef } from 'react'
-import { Line } from 'react-chartjs-2'
+import { useState, useEffect } from 'react'
+import { Line, Bar } from 'react-chartjs-2'
 import {
   Chart as ChartJS,
   CategoryScale,
   LinearScale,
   PointElement,
   LineElement,
+  BarElement,
   Title,
   Tooltip,
   Filler
 } from 'chart.js'
 import './App.css'
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Filler)
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, Title, Tooltip, Filler)
 
 const API = '/api'
 const REFRESH_MS = 3000
@@ -145,6 +146,41 @@ function CpuChart({ history, timestamps }) {
   return <div className="chart-container"><Line data={data} options={options} /></div>
 }
 
+function ActivityBarChart({ scoreHistory, timestamps }) {
+  if (!scoreHistory || scoreHistory.length < 1) return null
+
+  const labels = timestamps.map((ts, i) => {
+    if (i % 3 === 0) {
+      const d = new Date(ts)
+      return d.toLocaleTimeString('ru', { minute: '2-digit', second: '2-digit' })
+    }
+    return ''
+  })
+
+  const data = {
+    labels,
+    datasets: [{
+      label: 'Активность',
+      data: scoreHistory,
+      backgroundColor: 'rgba(168, 85, 247, 0.6)',
+      borderColor: 'rgba(168, 85, 247, 0.9)',
+      borderWidth: 1
+    }]
+  }
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { min: 0, max: 100, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 10 } } },
+      x: { grid: { display: false }, ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 9 }, maxRotation: 0 } }
+    }
+  }
+
+  return <div className="chart-container chart-activity"><Bar data={data} options={options} /></div>
+}
+
 function App() {
   useTelegramWebApp()
   const [stats, setStats] = useState(null)
@@ -235,6 +271,59 @@ function App() {
           </div>
         </div>
       </Card>
+
+      {(stats?.activity != null || stats?._real) && (() => {
+        const activity = stats?.activity ?? { keysTotal: 0, clicksTotal: 0, keysPerMin: 0, clicksPerMin: 0, keysByLetter: {} }
+        return (
+        <div className="activity-section">
+          <Card title="Моя активность" className="activity-card">
+            {stats.activityHistory?.score?.length > 0 && (
+              <ActivityBarChart scoreHistory={stats.activityHistory.score} timestamps={stats.activityHistory.timestamps} />
+            )}
+            {(!stats.activityHistory?.score?.length) && (
+              <div className="activity-score-now">
+                <span className="activity-score-value">
+                  {Math.min(100, Math.round((activity.keysPerMin || 0) * 0.5 + (activity.clicksPerMin || 0) * 2))}
+                </span>
+                <span className="activity-score-label">индекс сейчас</span>
+              </div>
+            )}
+          </Card>
+          <div className="activity-grid">
+            <Card title="Клавиши" className="activity-subcard">
+              <div className="activity-big">{activity.keysTotal ?? 0}</div>
+              <div className="activity-sub">всего нажатий</div>
+              <MetricRow label="В минуту" value={`${activity.keysPerMin ?? 0}`} />
+              {activity.keysByLetter && Object.keys(activity.keysByLetter).length > 0 && (() => {
+                const entries = Object.entries(activity.keysByLetter)
+                  .sort((a, b) => (b[1] || 0) - (a[1] || 0))
+                  .slice(0, 12)
+                const maxCount = Math.max(1, ...entries.map(([, c]) => c || 0))
+                return (
+                  <div className="keys-by-letter">
+                    <div className="keys-by-letter-title">По буквам</div>
+                    {entries.map(([letter, count]) => (
+                      <div key={letter} className="letter-row">
+                        <span className="letter-key">{letter === ' ' ? 'Space' : letter}</span>
+                        <div className="letter-bar-wrap">
+                          <div className="letter-bar" style={{ width: `${(count / maxCount) * 100}%` }} />
+                        </div>
+                        <span className="letter-count">{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
+            </Card>
+            <Card title="Клики мыши" className="activity-subcard">
+              <div className="activity-big">{activity.clicksTotal ?? 0}</div>
+              <div className="activity-sub">всего кликов</div>
+              <MetricRow label="В минуту" value={`${activity.clicksPerMin ?? 0}`} />
+            </Card>
+          </div>
+        </div>
+        )
+      })()}
 
       {isReal && (
         <div className="footer-note">

@@ -283,6 +283,119 @@
   margin-top: 2px;
 }
 
+/* Activity section */
+.activity-section {
+  margin-top: 20px;
+}
+
+.activity-card {
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.08), rgba(59, 130, 246, 0.08));
+  border-color: rgba(168, 85, 247, 0.2);
+}
+
+.chart-activity {
+  height: 140px;
+  margin-top: 8px;
+}
+
+.activity-score-now {
+  text-align: center;
+  padding: 20px;
+}
+
+.activity-score-value {
+  display: block;
+  font-size: 48px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #a855f7, #3b82f6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.activity-score-label {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.activity-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+@media (max-width: 480px) {
+  .activity-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.activity-subcard .activity-big {
+  font-size: 28px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #a855f7, #3b82f6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.activity-subcard .activity-sub {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 8px;
+}
+
+.keys-by-letter {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.keys-by-letter-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 8px;
+}
+
+.letter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.letter-key {
+  min-width: 28px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.letter-bar-wrap {
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.letter-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #a855f7, #6366f1);
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.letter-count {
+  min-width: 32px;
+  text-align: right;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+}
+
 .footer-note {
   text-align: center;
   font-size: 11px;

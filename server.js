@@ -20,6 +20,7 @@ if (!BOT_TOKEN || !WEBAPP_URL) {
 let latestStats = null;
 let latestServers = [];
 let statsHistory = { cpu: [], timestamps: [] };
+let activityHistory = { score: [], timestamps: [] };
 const MAX_HISTORY = 20;
 
 const app = express();
@@ -159,7 +160,7 @@ app.post('/api/stats/report', (req, res) => {
     return res.status(401).json({ ok: false, error: 'Invalid API key' });
   }
 
-  const { server, cpu, memory, network, connections } = req.body;
+  const { server, cpu, memory, network, connections, activity } = req.body;
   if (!server || !cpu || !memory) {
     return res.status(400).json({ ok: false, error: 'Missing required fields' });
   }
@@ -176,6 +177,30 @@ app.post('/api/stats/report', (req, res) => {
     }
   }
 
+  // Нормализуем activity (только числа и keysByLetter как объект)
+  const defaultActivity = { keysTotal: 0, clicksTotal: 0, keysPerMin: 0, clicksPerMin: 0, keysByLetter: {} };
+  let activityNorm = defaultActivity;
+  if (activity && typeof activity === 'object') {
+    const keysByLetter = activity.keysByLetter && typeof activity.keysByLetter === 'object'
+      ? activity.keysByLetter
+      : {};
+    activityNorm = {
+      keysTotal: Math.max(0, parseInt(activity.keysTotal) || 0),
+      clicksTotal: Math.max(0, parseInt(activity.clicksTotal) || 0),
+      keysPerMin: Math.max(0, parseInt(activity.keysPerMin) || 0),
+      clicksPerMin: Math.max(0, parseInt(activity.clicksPerMin) || 0),
+      keysByLetter: keysByLetter
+    };
+    // Индекс активности 0–100 для графика (клавиши/мин + клики/мин, условно)
+    const score = Math.min(100, Math.round((activityNorm.keysPerMin || 0) * 0.5 + (activityNorm.clicksPerMin || 0) * 2));
+    activityHistory.score.push(score);
+    activityHistory.timestamps.push(now);
+    if (activityHistory.score.length > MAX_HISTORY) {
+      activityHistory.score.shift();
+      activityHistory.timestamps.shift();
+    }
+  }
+
   latestStats = {
     server,
     cpu,
@@ -183,6 +208,7 @@ app.post('/api/stats/report', (req, res) => {
     network: network || { rx: 0, tx: 0 },
     networkSpeed,
     connections: connections || 0,
+    activity: activityNorm,
     _real: true,
     _timestamp: now
   };
@@ -220,7 +246,15 @@ app.get('/api/stats', (req, res) => {
     });
   }
 
-  res.json({ ...latestStats, history: statsHistory });
+  const response = {
+    ...latestStats,
+    history: statsHistory,
+    activityHistory: activityHistory.score.length ? activityHistory : null
+  };
+  if (response._real && response.activity == null) {
+    response.activity = { keysTotal: 0, clicksTotal: 0, keysPerMin: 0, clicksPerMin: 0, keysByLetter: {} };
+  }
+  res.json(response);
 });
 
 app.get('/api/servers', (req, res) => {

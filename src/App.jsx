@@ -1,8 +1,21 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { Line } from 'react-chartjs-2'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Filler
+} from 'chart.js'
 import './App.css'
 
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Filler)
+
 const API = '/api'
-const REFRESH_MS = 5000
+const REFRESH_MS = 3000
 
 function useTelegramWebApp() {
   useEffect(() => {
@@ -10,6 +23,8 @@ function useTelegramWebApp() {
     if (tg) {
       tg.ready()
       tg.expand()
+      tg.setHeaderColor('#1a1a1a')
+      tg.setBackgroundColor('#1a1a1a')
     }
   }, [])
 }
@@ -34,7 +49,12 @@ function formatBytes(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-function Card({ title, className, children }) {
+function formatSpeed(bytesPerSec) {
+  if (!bytesPerSec) return '0 B/s'
+  return formatBytes(bytesPerSec) + '/s'
+}
+
+function Card({ title, children, className }) {
   return (
     <div className={`card ${className || ''}`}>
       <h3>{title}</h3>
@@ -43,125 +63,183 @@ function Card({ title, className, children }) {
   )
 }
 
-function ProgressBar({ value, max = 100 }) {
-  const pct = Math.min(100, Math.round((value / max) * 100))
-  const color = pct > 80 ? 'danger' : pct > 60 ? 'warn' : 'ok'
+function MetricRow({ label, value, className }) {
   return (
-    <div className="progress-bar">
-      <div className={`progress-fill ${color}`} style={{ width: `${pct}%` }} />
-      <span className="progress-text">{pct}%</span>
+    <div className={`metric-row ${className || ''}`}>
+      <span className="label">{label}</span>
+      <span className="value">{value}</span>
     </div>
   )
+}
+
+function ProgressBar({ value, max = 100, showLabel = true }) {
+  const pct = Math.min(100, Math.max(0, Math.round((value / max) * 100)))
+  const color = pct > 80 ? 'danger' : pct > 60 ? 'warn' : 'ok'
+  return (
+    <div className="progress-wrapper">
+      <div className="progress-bar">
+        <div className={`progress-fill ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+      {showLabel && <span className="progress-label">{pct}%</span>}
+    </div>
+  )
+}
+
+function CpuChart({ history, timestamps }) {
+  if (!history || history.length < 2) return null
+
+  const labels = timestamps.map((ts, i) => {
+    if (i % 3 === 0) {
+      const d = new Date(ts)
+      return d.toLocaleTimeString('ru', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    }
+    return ''
+  })
+
+  const data = {
+    labels,
+    datasets: [{
+      label: 'CPU %',
+      data: history,
+      borderColor: 'rgba(34, 197, 94, 0.8)',
+      backgroundColor: 'rgba(34, 197, 94, 0.1)',
+      fill: true,
+      tension: 0.4,
+      pointRadius: 0,
+      borderWidth: 2
+    }]
+  }
+
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: { 
+        mode: 'index',
+        intersect: false,
+        backgroundColor: 'rgba(0, 0, 0, 0.8)',
+        padding: 8,
+        cornerRadius: 6
+      }
+    },
+    scales: {
+      y: { 
+        min: 0, 
+        max: 100,
+        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+        ticks: { color: 'rgba(255, 255, 255, 0.5)', font: { size: 10 } }
+      },
+      x: { 
+        grid: { display: false },
+        ticks: { color: 'rgba(255, 255, 255, 0.5)', font: { size: 9 }, maxRotation: 0 }
+      }
+    },
+    interaction: {
+      mode: 'nearest',
+      axis: 'x',
+      intersect: false
+    }
+  }
+
+  return <div className="chart-container"><Line data={data} options={options} /></div>
 }
 
 function App() {
   useTelegramWebApp()
   const [stats, setStats] = useState(null)
-  const [servers, setServers] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
   const fetchData = () =>
-    Promise.all([
-      fetch(`${API}/stats`).then(r => r.json()),
-      fetch(`${API}/servers`).then(r => r.json())
-    ])
-      .then(([s, sv]) => {
-        setStats(s)
-        setServers(sv)
+    fetch(`${API}/stats`)
+      .then(r => r.json())
+      .then(data => {
+        setStats(data)
+        setError(null)
       })
       .catch(err => setError(err.message))
 
   useEffect(() => {
     fetchData().finally(() => setLoading(false))
-  }, [])
-
-  useEffect(() => {
     const id = setInterval(fetchData, REFRESH_MS)
     return () => clearInterval(id)
   }, [])
 
-  if (loading) return <div className="loading">Загрузка...</div>
-  if (error) return <div className="error">Ошибка: {error}</div>
+  if (loading) return <div className="center-message">Загрузка...</div>
+  if (error) return <div className="center-message error">Ошибка: {error}</div>
 
   const isReal = stats?._real
-  const isStub = !isReal && (stats?._stub || servers?._stub)
 
   return (
     <div className="app">
-      <header>
-        <h1>VPN — Статистика серверов</h1>
-        {isStub && <span className="stub-badge">Демо</span>}
+      <header className="app-header">
+        <div className="header-title">
+          <h1>VPN Dashboard</h1>
+          {isReal && <span className="live-badge">● Live</span>}
+        </div>
+        <div className="server-name">{stats?.server?.name}</div>
       </header>
 
-      <div className="grid">
-        <Card title="Сервер">
-          <div className="stat-row">
-            <span>Имя:</span>
-            <span className="mono">{stats?.server?.name ?? '—'}</span>
-          </div>
-          <div className="stat-row">
-            <span>Статус:</span>
-            <span className={`status ${stats?.server?.status}`}>
-              {stats?.server?.status ?? '—'}
-            </span>
-          </div>
-          <div className="stat-row">
-            <span>Uptime:</span>
-            <span>{formatUptime(stats?.server?.uptime)}</span>
-          </div>
+      <div className="metrics-grid">
+        <Card title="CPU" className="card-highlight">
+          <div className="big-metric">{stats?.cpu?.usage ?? 0}%</div>
+          <ProgressBar value={stats?.cpu?.usage ?? 0} showLabel={false} />
+          <MetricRow label="Ядра" value={stats?.cpu?.cores ?? 0} />
         </Card>
 
-        <Card title="CPU">
-          <ProgressBar value={stats?.cpu?.usage ?? 0} />
-          <div className="stat-row">
-            <span>Ядра:</span>
-            <span>{stats?.cpu?.cores ?? 0}</span>
-          </div>
+        <Card title="Память" className="card-highlight">
+          <div className="big-metric">{stats?.memory?.percent ?? 0}%</div>
+          <ProgressBar value={stats?.memory?.percent ?? 0} showLabel={false} />
+          <MetricRow 
+            label="Использовано" 
+            value={`${formatBytes(stats?.memory?.used)} / ${formatBytes(stats?.memory?.total)}`} 
+          />
         </Card>
 
-        <Card title="Память">
-          <ProgressBar value={stats?.memory?.percent ?? 0} />
-          <div className="stat-row">
-            <span>Исп./Всего:</span>
-            <span>{formatBytes(stats?.memory?.used)} / {formatBytes(stats?.memory?.total)}</span>
-          </div>
-        </Card>
-
-        <Card title="Сеть">
-          <div className="stat-row">
-            <span>↓ RX:</span>
-            <span>{formatBytes(stats?.network?.rx)}</span>
-          </div>
-          <div className="stat-row">
-            <span>↑ TX:</span>
-            <span>{formatBytes(stats?.network?.tx)}</span>
-          </div>
+        <Card title="Uptime">
+          <div className="big-metric">{formatUptime(stats?.server?.uptime)}</div>
+          <MetricRow 
+            label="Статус" 
+            value={<span className="status online">{stats?.server?.status ?? '—'}</span>} 
+          />
         </Card>
 
         <Card title="Подключения">
-          <div className="stat-value">{stats?.connections ?? 0}</div>
-          <p className="muted">активных VPN</p>
-        </Card>
-
-        <Card title="Серверы" className="wide">
-          <div className="server-list">
-            {(servers?.servers ?? []).map(s => (
-              <div key={s.id} className="server-item">
-                <span className="server-name">{s.name}</span>
-                <span className="server-region">{s.region}</span>
-                <span className={`status ${s.status}`}>{s.status}</span>
-                <span className="server-users">{s.users} чел.</span>
-              </div>
-            ))}
-          </div>
+          <div className="big-metric">{stats?.connections ?? 0}</div>
+          <div className="metric-sub">активных VPN</div>
         </Card>
       </div>
 
-      {isStub && (
-        <p className="stub-note">
-          Демо-данные. Обновление каждые {REFRESH_MS / 1000} с. Подключи реальный API для живой статистики.
-        </p>
+      {stats?.history?.cpu && stats.history.cpu.length > 1 && (
+        <Card title="CPU — История" className="chart-card">
+          <CpuChart history={stats.history.cpu} timestamps={stats.history.timestamps} />
+        </Card>
+      )}
+
+      <Card title="Сеть" className="network-card">
+        <div className="network-grid">
+          <div className="network-item">
+            <div className="network-icon">↓</div>
+            <div className="network-data">
+              <div className="network-speed">{formatSpeed(stats?.networkSpeed?.rx)}</div>
+              <div className="network-total">RX: {formatBytes(stats?.network?.rx)}</div>
+            </div>
+          </div>
+          <div className="network-item">
+            <div className="network-icon">↑</div>
+            <div className="network-data">
+              <div className="network-speed">{formatSpeed(stats?.networkSpeed?.tx)}</div>
+              <div className="network-total">TX: {formatBytes(stats?.network?.tx)}</div>
+            </div>
+          </div>
+        </div>
+      </Card>
+
+      {isReal && (
+        <div className="footer-note">
+          Обновление каждые {REFRESH_MS / 1000} сек
+        </div>
       )}
     </div>
   )

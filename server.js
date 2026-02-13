@@ -19,6 +19,8 @@ if (!BOT_TOKEN || !WEBAPP_URL) {
 // Хранилище последней статистики (в памяти)
 let latestStats = null;
 let latestServers = [];
+let statsHistory = { cpu: [], timestamps: [] };
+const MAX_HISTORY = 20;
 
 const app = express();
 app.use(express.json());
@@ -162,15 +164,36 @@ app.post('/api/stats/report', (req, res) => {
     return res.status(400).json({ ok: false, error: 'Missing required fields' });
   }
 
+  const now = Date.now();
+  
+  // Вычисляем скорость сети (если есть предыдущие данные)
+  let networkSpeed = { rx: 0, tx: 0 };
+  if (latestStats && latestStats.network && latestStats._timestamp) {
+    const timeDelta = (now - latestStats._timestamp) / 1000; // секунды
+    if (timeDelta > 0 && network) {
+      networkSpeed.rx = Math.max(0, (network.rx - latestStats.network.rx) / timeDelta);
+      networkSpeed.tx = Math.max(0, (network.tx - latestStats.network.tx) / timeDelta);
+    }
+  }
+
   latestStats = {
     server,
     cpu,
     memory,
     network: network || { rx: 0, tx: 0 },
+    networkSpeed,
     connections: connections || 0,
     _real: true,
-    _timestamp: Date.now()
+    _timestamp: now
   };
+
+  // История CPU для графика
+  statsHistory.cpu.push(cpu.usage);
+  statsHistory.timestamps.push(now);
+  if (statsHistory.cpu.length > MAX_HISTORY) {
+    statsHistory.cpu.shift();
+    statsHistory.timestamps.shift();
+  }
 
   res.json({ ok: true });
 });
@@ -197,7 +220,7 @@ app.get('/api/stats', (req, res) => {
     });
   }
 
-  res.json(latestStats);
+  res.json({ ...latestStats, history: statsHistory });
 });
 
 app.get('/api/servers', (req, res) => {

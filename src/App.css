@@ -40,14 +40,27 @@
 }
 
 .live-badge {
-  background: rgba(34, 197, 94, 0.2);
-  color: #22c55e;
   padding: 4px 12px;
   border-radius: 12px;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.5px;
+}
+
+.live-badge:not(.stale):not(.local) {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22c55e;
   animation: pulse 2s infinite;
+}
+
+.live-badge.stale {
+  background: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+.live-badge.local {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.6);
 }
 
 @keyframes pulse {
@@ -281,6 +294,66 @@
   font-size: 11px;
   color: rgba(255, 255, 255, 0.5);
   margin-top: 2px;
+}
+
+/* System section */
+.system-section {
+  margin-top: 16px;
+}
+
+.system-card {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.06), rgba(168, 85, 247, 0.06));
+  border-color: rgba(59, 130, 246, 0.15);
+}
+
+.system-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.system-item {
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.system-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 4px;
+}
+
+.system-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.system-value.temp {
+  color: #f59e0b;
+}
+
+.system-value.battery {
+  color: #22c55e;
+}
+
+.system-sub {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 2px;
+}
+
+.system-os {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
 }
 
 /* Activity section */

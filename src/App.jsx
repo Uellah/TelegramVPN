@@ -17,6 +17,7 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarEleme
 
 const API = '/api'
 const REFRESH_MS = 3000
+const STALE_MS = 20000 // данные от агента считаются "живыми" только 20 сек
 
 function useTelegramWebApp() {
   useEffect(() => {
@@ -206,13 +207,18 @@ function App() {
   if (error) return <div className="center-message error">Ошибка: {error}</div>
 
   const isReal = stats?._real
+  const isLocal = stats?._local
+  const lastUpdate = stats?._timestamp || 0
+  const isLive = isReal && !isLocal && (Date.now() - lastUpdate) < STALE_MS
 
   return (
     <div className="app">
       <header className="app-header">
         <div className="header-title">
           <h1>VPN Dashboard</h1>
-          {isReal && <span className="live-badge">● Live</span>}
+          {isLocal && <span className="live-badge local">Локальный</span>}
+          {isReal && !isLocal && isLive && <span className="live-badge">● Live</span>}
+          {isReal && !isLocal && !isLive && <span className="live-badge stale">● Нет связи</span>}
         </div>
         <div className="server-name">{stats?.server?.name}</div>
       </header>
@@ -271,6 +277,55 @@ function App() {
           </div>
         </div>
       </Card>
+
+      {stats?.system && (
+        <div className="system-section">
+          <Card title="Система" className="system-card">
+            <div className="system-grid">
+              {stats.system.loadavg && stats.system.loadavg.some(Boolean) && (
+                <div className="system-item">
+                  <div className="system-label">Load (1 / 5 / 15 мин)</div>
+                  <div className="system-value">{stats.system.loadavg.map(n => n.toFixed(2)).join(' / ')}</div>
+                </div>
+              )}
+              {stats.system.swap != null && (
+                <div className="system-item">
+                  <div className="system-label">Swap</div>
+                  <div className="system-value">{stats.system.swap.percent}%</div>
+                  <div className="system-sub">{formatBytes(stats.system.swap.used)} / {formatBytes(stats.system.swap.total)}</div>
+                </div>
+              )}
+              {stats.system.disk != null && (
+                <div className="system-item">
+                  <div className="system-label">Диск /</div>
+                  <div className="system-value">{stats.system.disk.percent}%</div>
+                </div>
+              )}
+              {stats.system.temp != null && (
+                <div className="system-item">
+                  <div className="system-label">CPU</div>
+                  <div className="system-value temp">{stats.system.temp} °C</div>
+                </div>
+              )}
+              {stats.system.battery != null && (
+                <div className="system-item">
+                  <div className="system-label">Батарея</div>
+                  <div className="system-value battery">{stats.system.battery}%</div>
+                </div>
+              )}
+              {stats.system.processCount != null && (
+                <div className="system-item">
+                  <div className="system-label">Процессы</div>
+                  <div className="system-value">{stats.system.processCount}</div>
+                </div>
+              )}
+            </div>
+            <div className="system-os">
+              {stats.system.platform} · {stats.system.release} · {stats.system.arch}
+            </div>
+          </Card>
+        </div>
+      )}
 
       {(stats?.activity != null || stats?._real) && (() => {
         const activity = stats?.activity ?? { keysTotal: 0, clicksTotal: 0, keysPerMin: 0, clicksPerMin: 0, keysByLetter: {} }

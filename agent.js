@@ -3,6 +3,7 @@ require('dotenv').config();
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 const https = require('https');
 const http = require('http');
 
@@ -90,6 +91,81 @@ function calculateCpuUsage() {
   return Math.round(100 - (idleDelta / totalDelta) * 100);
 }
 
+// Дополнительные системные метрики (Linux в приоритете)
+function getSystemInfo() {
+  const platform = os.platform();
+  const result = {
+    platform: platform,
+    release: os.release(),
+    arch: os.arch(),
+    loadavg: [0, 0, 0],
+    swap: null,
+    disk: null,
+    temp: null,
+    battery: null,
+    processCount: null
+  };
+
+  try {
+    const load = os.loadavg();
+    if (load && load.length >= 3) result.loadavg = [Math.round(load[0] * 100) / 100, Math.round(load[1] * 100) / 100, Math.round(load[2] * 100) / 100];
+  } catch (_) {}
+
+  if (platform === 'linux') {
+    try {
+      const mem = fs.readFileSync('/proc/meminfo', 'utf8');
+      const get = (name) => {
+        const m = mem.match(new RegExp(name + ':\\s+(\\d+)'));
+        return m ? parseInt(m[1], 10) * 1024 : 0;
+      };
+      const swapTotal = get('SwapTotal');
+      const swapFree = get('SwapFree');
+      if (swapTotal > 0) {
+        result.swap = {
+          total: swapTotal,
+          used: swapTotal - swapFree,
+          percent: Math.round(((swapTotal - swapFree) / swapTotal) * 100)
+        };
+      }
+    } catch (_) {}
+
+    try {
+      const dirs = fs.readdirSync('/proc');
+      result.processCount = dirs.filter(d => /^\d+$/.test(d)).length;
+    } catch (_) {}
+
+    try {
+      const zones = fs.readdirSync('/sys/class/thermal').filter(z => z.startsWith('thermal_zone'));
+      for (const z of zones) {
+        const p = path.join('/sys/class/thermal', z, 'temp');
+        if (fs.existsSync(p)) {
+          const t = parseInt(fs.readFileSync(p, 'utf8').trim(), 10);
+          if (t > 0) {
+            result.temp = Math.round(t / 1000);
+            break;
+          }
+        }
+      }
+    } catch (_) {}
+
+    try {
+      const bat = '/sys/class/power_supply/BAT0/capacity';
+      if (fs.existsSync(bat)) result.battery = parseInt(fs.readFileSync(bat, 'utf8').trim(), 10);
+    } catch (_) {}
+
+    try {
+      const out = execSync('df -P /', { encoding: 'utf8', timeout: 2000 });
+      const line = out.split('\n')[1];
+      if (line) {
+        const parts = line.split(/\s+/);
+        if (parts.length >= 5) result.disk = { percent: parseInt(parts[4], 10) || 0, mount: '/' };
+      }
+    } catch (_) {}
+  }
+
+  return result;
+}
+
 // Сбор через os (если node_exporter не используется)
 function getNetworkStatsNative() {
   // Linux: читаем /proc/net/dev
@@ -132,7 +208,8 @@ function collectStatsNative() {
     cpu: { usage: cpuUsage, cores: cpus.length },
     memory: { used: total - free, total, percent: Math.round(((total - free) / total) * 100) },
     network,
-    connections: 0
+    connections: 0,
+    system: getSystemInfo()
   };
 }
 
@@ -146,7 +223,7 @@ async function collectStats() {
     lib.get(url, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
-      res.on('end', () => resolve(parsePrometheusMetrics(data)));
+      res.on('end', () => resolve({ ...parsePrometheusMetrics(data), system: getSystemInfo() }));
     }).on('error', (err) => {
       console.error('node_exporter error:', err.message);
       resolve(collectStatsNative()); // fallback

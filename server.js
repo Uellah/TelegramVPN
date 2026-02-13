@@ -20,8 +20,17 @@ if (!BOT_TOKEN || !WEBAPP_URL) {
 let latestStats = null;
 let latestServers = [];
 let statsHistory = { cpu: [], timestamps: [] };
-let activityHistory = { score: [], timestamps: [] };
+let activityHistory = { score: [], timestamps: [], rates: [] };
 const MAX_HISTORY = 20;
+
+// Активность как перцентиль по твоей же истории: 100 = пик, 0 = минимум, ~50 = как обычно
+function activityPercentile(currentRate, rates) {
+  if (!rates.length) return 50;
+  const less = rates.filter(r => r < currentRate).length;
+  const n = rates.length;
+  if (less === n - 1) return 100; // текущее значение — максимум в окне
+  return Math.round((less / n) * 100);
+}
 
 const app = express();
 app.use(express.json());
@@ -160,7 +169,7 @@ app.post('/api/stats/report', (req, res) => {
     return res.status(401).json({ ok: false, error: 'Invalid API key' });
   }
 
-  const { server, cpu, memory, network, connections, activity } = req.body;
+  const { server, cpu, memory, network, connections, activity, system } = req.body;
   if (!server || !cpu || !memory) {
     return res.status(400).json({ ok: false, error: 'Missing required fields' });
   }
@@ -191,8 +200,12 @@ app.post('/api/stats/report', (req, res) => {
       clicksPerMin: Math.max(0, parseInt(activity.clicksPerMin) || 0),
       keysByLetter: keysByLetter
     };
-    // Индекс активности 0–100 для графика (клавиши/мин + клики/мин, условно)
-    const score = Math.min(100, Math.round((activityNorm.keysPerMin || 0) * 0.5 + (activityNorm.clicksPerMin || 0) * 2));
+    // Сырая "скорость" активности (одно число для сравнения)
+    const rate = (activityNorm.keysPerMin || 0) + (activityNorm.clicksPerMin || 0) * 1.5;
+    activityHistory.rates.push(rate);
+    if (activityHistory.rates.length > MAX_HISTORY) activityHistory.rates.shift();
+    // Оценка = перцентиль: насколько текущая активность выше/ниже твоей обычной
+    const score = activityPercentile(rate, activityHistory.rates);
     activityHistory.score.push(score);
     activityHistory.timestamps.push(now);
     if (activityHistory.score.length > MAX_HISTORY) {
@@ -209,6 +222,7 @@ app.post('/api/stats/report', (req, res) => {
     networkSpeed,
     connections: connections || 0,
     activity: activityNorm,
+    system: system && typeof system === 'object' ? system : undefined,
     _real: true,
     _timestamp: now
   };

@@ -215,7 +215,7 @@ function App() {
     <div className="app">
       <header className="app-header">
         <div className="header-title">
-          <h1>VPN Dashboard</h1>
+          <h1>Мой дашборд</h1>
           {isLocal && <span className="live-badge local">Локальный</span>}
           {isReal && !isLocal && isLive && <span className="live-badge">● Live</span>}
           {isReal && !isLocal && !isLive && <span className="live-badge stale">● Нет связи</span>}

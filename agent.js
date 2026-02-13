@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 require('dotenv').config();
 const os = require('os');
+const fs = require('fs');
 const https = require('https');
 const http = require('http');
 
